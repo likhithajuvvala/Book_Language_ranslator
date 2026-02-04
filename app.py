@@ -5,7 +5,7 @@ from langdetect import detect, LangDetectException
 st.set_page_config(page_title="Book Language Translator", layout="centered")
 
 st.title("📘 Book Language Translator")
-st.write("Automatic language detection with multilingual ML translation")
+st.write("Automatic language detection with multilingual translation")
 
 LANGUAGES = {
     "English": "en",
@@ -36,29 +36,27 @@ if st.button("Translate"):
         try:
             detected_lang = detect(text)
 
+            # ✅ Fallback instead of error
             if detected_lang not in SUPPORTED_CODES:
-                st.error("Detected language not supported.")
-            else:
-                tokenizer.src_lang = detected_lang
+                detected_lang = "en"
 
-                encoded = tokenizer(text, return_tensors="pt")
+            tokenizer.src_lang = detected_lang
+            encoded = tokenizer(text, return_tensors="pt")
 
-                generated_tokens = model.generate(
-                    **encoded,
-                    forced_bos_token_id=tokenizer.get_lang_id(
-                        LANGUAGES[target_lang]
-                    ),
-                    max_length=512
-                )
+            generated_tokens = model.generate(
+                **encoded,
+                forced_bos_token_id=tokenizer.get_lang_id(LANGUAGES[target_lang]),
+                max_length=512
+            )
 
-                translated_text = tokenizer.batch_decode(
-                    generated_tokens, skip_special_tokens=True
-                )[0]
+            translated_text = tokenizer.batch_decode(
+                generated_tokens, skip_special_tokens=True
+            )[0]
 
-                st.success(f"Detected language: {detected_lang}")
-                st.text_area("Translated Text", translated_text, height=200)
+            st.success(f"Source language used: {detected_lang}")
+            st.text_area("Translated Text", translated_text, height=200)
 
         except LangDetectException:
-            st.error("Unable to detect language. Please enter clearer text.")
+            st.error("Could not detect language. Try clearer text.")
         except Exception:
             st.error("Translation failed. Try shorter text.")

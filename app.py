@@ -1,10 +1,11 @@
 import streamlit as st
 from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
+from langdetect import detect, LangDetectException
 
 st.set_page_config(page_title="Book Language Translator", layout="centered")
 
 st.title("📘 Book Language Translator")
-st.write("Multilingual translation using Transformer-based Machine Learning")
+st.write("Automatic language detection with multilingual ML translation")
 
 LANGUAGES = {
     "English": "en",
@@ -15,6 +16,8 @@ LANGUAGES = {
     "Tamil": "ta"
 }
 
+SUPPORTED_CODES = set(LANGUAGES.values())
+
 @st.cache_resource
 def load_model():
     tokenizer = M2M100Tokenizer.from_pretrained("facebook/m2m100_418M")
@@ -24,35 +27,38 @@ def load_model():
 tokenizer, model = load_model()
 
 text = st.text_area("Enter book text", height=200)
-
-col1, col2 = st.columns(2)
-with col1:
-    src_lang = st.selectbox("Source Language", LANGUAGES.keys())
-with col2:
-    tgt_lang = st.selectbox("Target Language", LANGUAGES.keys())
+target_lang = st.selectbox("Target Language", LANGUAGES.keys())
 
 if st.button("Translate"):
     if not text.strip():
-        st.warning("Please enter text to translate.")
-    elif src_lang == tgt_lang:
-        st.warning("Source and target languages must be different.")
+        st.warning("Please enter text.")
     else:
         try:
-            tokenizer.src_lang = LANGUAGES[src_lang]
-            encoded = tokenizer(text, return_tensors="pt")
+            detected_lang = detect(text)
 
-            generated_tokens = model.generate(
-                **encoded,
-                forced_bos_token_id=tokenizer.get_lang_id(LANGUAGES[tgt_lang]),
-                max_length=512
-            )
+            if detected_lang not in SUPPORTED_CODES:
+                st.error("Detected language not supported.")
+            else:
+                tokenizer.src_lang = detected_lang
 
-            translated_text = tokenizer.batch_decode(
-                generated_tokens, skip_special_tokens=True
-            )[0]
+                encoded = tokenizer(text, return_tensors="pt")
 
-            st.success("Translation successful")
-            st.text_area("Translated Text", translated_text, height=200)
+                generated_tokens = model.generate(
+                    **encoded,
+                    forced_bos_token_id=tokenizer.get_lang_id(
+                        LANGUAGES[target_lang]
+                    ),
+                    max_length=512
+                )
 
-        except Exception as e:
-            st.error("Translation failed. Please try shorter text.")
+                translated_text = tokenizer.batch_decode(
+                    generated_tokens, skip_special_tokens=True
+                )[0]
+
+                st.success(f"Detected language: {detected_lang}")
+                st.text_area("Translated Text", translated_text, height=200)
+
+        except LangDetectException:
+            st.error("Unable to detect language. Please enter clearer text.")
+        except Exception:
+            st.error("Translation failed. Try shorter text.")

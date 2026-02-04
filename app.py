@@ -1,49 +1,58 @@
 import streamlit as st
-from transformers import pipeline
+from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
 
 st.set_page_config(page_title="Book Language Translator", layout="centered")
 
-st.title("📘 Book Language Translator (ML)")
-st.write("Translate book content using Transformer models")
+st.title("📘 Book Language Translator")
+st.write("Multilingual translation using Transformer-based Machine Learning")
 
-# ONLY supported languages
 LANGUAGES = {
     "English": "en",
     "French": "fr",
     "German": "de",
     "Spanish": "es",
-    "Hindi": "hi"
+    "Hindi": "hi",
+    "Tamil": "ta"
 }
 
 @st.cache_resource
-def load_model(src, tgt):
-    model_name = f"Helsinki-NLP/opus-mt-{src}-{tgt}"
-    return pipeline("translation", model=model_name)
+def load_model():
+    tokenizer = M2M100Tokenizer.from_pretrained("facebook/m2m100_418M")
+    model = M2M100ForConditionalGeneration.from_pretrained("facebook/m2m100_418M")
+    return tokenizer, model
+
+tokenizer, model = load_model()
 
 text = st.text_area("Enter book text", height=200)
 
 col1, col2 = st.columns(2)
 with col1:
-    source = st.selectbox("Source Language", LANGUAGES.keys())
+    src_lang = st.selectbox("Source Language", LANGUAGES.keys())
 with col2:
-    target = st.selectbox("Target Language", LANGUAGES.keys())
+    tgt_lang = st.selectbox("Target Language", LANGUAGES.keys())
 
 if st.button("Translate"):
     if not text.strip():
-        st.warning("Please enter text.")
-    elif source == target:
+        st.warning("Please enter text to translate.")
+    elif src_lang == tgt_lang:
         st.warning("Source and target languages must be different.")
     else:
         try:
-            src = LANGUAGES[source]
-            tgt = LANGUAGES[target]
+            tokenizer.src_lang = LANGUAGES[src_lang]
+            encoded = tokenizer(text, return_tensors="pt")
 
-            with st.spinner("Translating..."):
-                translator = load_model(src, tgt)
-                result = translator(text, max_length=512)[0]["translation_text"]
+            generated_tokens = model.generate(
+                **encoded,
+                forced_bos_token_id=tokenizer.get_lang_id(LANGUAGES[tgt_lang]),
+                max_length=512
+            )
+
+            translated_text = tokenizer.batch_decode(
+                generated_tokens, skip_special_tokens=True
+            )[0]
 
             st.success("Translation successful")
-            st.text_area("Translated Text", result, height=200)
+            st.text_area("Translated Text", translated_text, height=200)
 
-        except Exception:
-            st.error("Model not available for this language pair.")
+        except Exception as e:
+            st.error("Translation failed. Please try shorter text.")

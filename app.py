@@ -2,13 +2,11 @@ import streamlit as st
 from transformers import pipeline
 from langdetect import detect
 
-# Page config
 st.set_page_config(page_title="Book Language Translator", layout="centered")
 
 st.title("📚 Book Language Translator")
-st.write("Translate book text into multiple languages using Machine Learning")
+st.write("Translate book text using Machine Learning (Transformer Models)")
 
-# Supported languages
 LANGUAGES = {
     "English": "en",
     "French": "fr",
@@ -19,31 +17,38 @@ LANGUAGES = {
 }
 
 @st.cache_resource
-def load_translator(src_lang, tgt_lang):
-    model_name = f"Helsinki-NLP/opus-mt-{src_lang}-{tgt_lang}"
+def load_translator(src, tgt):
+    model_name = f"Helsinki-NLP/opus-mt-{src}-{tgt}"
     return pipeline("translation", model=model_name)
 
-# Input text
 text = st.text_area("Enter book text or paragraph", height=200)
-
 target_language = st.selectbox("Select target language", list(LANGUAGES.keys()))
 
 if st.button("Translate"):
-    if text.strip() == "":
+    if not text.strip():
         st.warning("Please enter some text to translate.")
     else:
         try:
             src_lang = detect(text)
             tgt_lang = LANGUAGES[target_language]
 
-            if src_lang == tgt_lang:
-                st.info("Source and target languages are the same.")
-            else:
-                with st.spinner("Translating..."):
+            with st.spinner("Translating..."):
+
+                # Case 1: Direct translation exists
+                if src_lang == "en" or tgt_lang == "en":
                     translator = load_translator(src_lang, tgt_lang)
-                    translated = translator(text, max_length=512)
-                    st.success("Translation completed!")
-                    st.text_area("Translated Text", translated[0]["translation_text"], height=200)
+                    output = translator(text, max_length=512)[0]["translation_text"]
+
+                # Case 2: Pivot through English
+                else:
+                    to_english = load_translator(src_lang, "en")
+                    english_text = to_english(text, max_length=512)[0]["translation_text"]
+
+                    from_english = load_translator("en", tgt_lang)
+                    output = from_english(english_text, max_length=512)[0]["translation_text"]
+
+            st.success("Translation completed!")
+            st.text_area("Translated Text", output, height=200)
 
         except Exception as e:
-            st.error("Translation failed. This language pair may not be supported.")
+            st.error("Translation failed due to unsupported language model.")
